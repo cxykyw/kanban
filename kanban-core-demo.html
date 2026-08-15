@@ -747,17 +747,30 @@ function render() {
   renderFilterUI();
 }
 function setView(v) { currentView = v; state.view = v; save(); updateViewSwitch(); render(); }
-/* 仅当列名被截断（出现省略号）时才给该柱子挂 data-tip 气泡；未截断则直接显示全称 */
+/* 仅当列名被截断（出现省略号）时才给该柱子挂 data-tip 气泡；未截断则直接显示全称。
+   注意：overflow:hidden 元素的 scrollWidth 在 Chrome 中可能等于 clientWidth，无法可靠判断截断，
+   因此用隐藏的等效 span 测量文本真实渲染宽度再做比较。 */
 function initBarsTooltip() {
+  requestAnimationFrame(function () {
   var names = boardEl.querySelectorAll('.bars .bl-name');
   names.forEach(function (el) {
     var label = el.closest('.bar-label');
     if (!label) return;
-    if (el.scrollWidth - el.clientWidth > 1) {
+    var cs = getComputedStyle(el);
+    var test = document.createElement('span');
+    test.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;' +
+      'font:' + cs.font + ';letter-spacing:' + cs.letterSpacing + ';text-transform:' + cs.textTransform + ';';
+    test.textContent = el.textContent;
+    document.body.appendChild(test);
+    var fullWidth = test.offsetWidth;
+    document.body.removeChild(test);
+    // 允许 1px 的测量/舍入误差
+    if (fullWidth > el.clientWidth + 1) {
       label.setAttribute('data-tip', el.textContent);
     } else {
       label.removeAttribute('data-tip');
     }
+  });
   });
 }
 function updateViewSwitch() {
