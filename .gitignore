@@ -1,0 +1,16 @@
+# 开发过程文件（非产物）
+.workbuddy/
+方案设计.md
+看板工具功能体系调研.md
+
+# 早期旧版 demo（非当前产物）
+index.html
+
+# 部署临时目录
+dist/
+
+# 系统/编辑器
+.DS_Store
+*.log
+.idea/
+.vscode/
