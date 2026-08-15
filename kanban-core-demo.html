@@ -417,17 +417,17 @@
   .bar-col:hover .bar-val { opacity: 1; }
   .bar-label { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 4px; }
   .bl-name { font-size: 12px; color: var(--text-2); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; cursor: default; }
-  .bar-label[data-tip]:hover::after {
-    content: attr(data-tip);
-    position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
-    white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
-    background: var(--text); color: var(--surface); font-size: 11px; font-weight: 500;
-    padding: 5px 9px; border-radius: 7px; z-index: 40; pointer-events: none;
+  /* JS 动态创建的真实 DOM 气泡，position:fixed 不受任何祖先 overflow 裁剪 */
+  .bar-tip-float {
+    position: fixed; z-index: 99999; pointer-events: none;
+    background: var(--text); color: var(--surface);
+    font-size: 11px; font-weight: 500; padding: 5px 9px;
+    border-radius: 7px; white-space: nowrap; max-width: 240px;
     box-shadow: var(--shadow-md);
   }
-  .bar-label[data-tip]:hover::before {
-    content: ""; position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%);
-    border: 5px solid transparent; border-top-color: var(--text); z-index: 40; pointer-events: none;
+  .bar-tip-float::after {
+    content: ""; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: var(--text);
   }
   .bl-count { flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-3); background: var(--list-bg); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; min-width: 20px; text-align: center; }
   .hbar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -771,6 +771,40 @@ function initBarsTooltip() {
       label.removeAttribute('data-tip');
     }
   });
+  bindBarTips();
+  });
+}
+/* 真实 DOM 气泡：position:fixed 不受祖先 overflow 裁剪，z-index 极高不被遮挡 */
+var _barTipEl = null;
+function showBarTip(label) {
+  hideBarTip();
+  var text = label.getAttribute('data-tip');
+  if (!text) return;
+  _barTipEl = document.createElement('div');
+  _barTipEl.className = 'bar-tip-float';
+  _barTipEl.textContent = text;
+  document.body.appendChild(_barTipEl);
+  var r = label.getBoundingClientRect();
+  var w = _barTipEl.offsetWidth, h = _barTipEl.offsetHeight;
+  var left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+  var top = r.top - h - 8;
+  if (top < 8) top = r.bottom + 8; /* 上方放不下就放下方 */
+  _barTipEl.style.left = left + 'px';
+  _barTipEl.style.top = top + 'px';
+}
+function hideBarTip() {
+  if (_barTipEl) { _barTipEl.remove(); _barTipEl = null; }
+}
+function bindBarTips() {
+  if (boardEl._barTipBound) return;
+  boardEl._barTipBound = true;
+  boardEl.addEventListener('mouseover', function (e) {
+    var label = e.target.closest && e.target.closest('.bars .bar-label[data-tip]');
+    if (label) showBarTip(label);
+  });
+  boardEl.addEventListener('mouseout', function (e) {
+    var label = e.target.closest && e.target.closest('.bars .bar-label[data-tip]');
+    if (label) hideBarTip();
   });
 }
 function updateViewSwitch() {
