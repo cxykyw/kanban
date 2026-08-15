@@ -657,7 +657,7 @@ function seed() {
         id: 'p1', name: '产品迭代看板', icon: '🚀', color: '#3b6cf6',
         members: defaultMembers(), labels: defaultLabels(),
         lists: [
-          { id: uid('l'), title: '待办', cards: [
+          { id: uid('l'), title: '产品需求待办池（Product Backlog）', cards: [
             { id: uid('c'), title: '设计首页原型（Figma 低保真线框图）', desc: '', memberIds: ['m1'], labelIds: ['lb2'], due: '', checklist: [], comments: [], attachments: [] },
             { id: uid('c'), title: '调研竞品拖拽体验：Trello / Planka / Notion', desc: '对比核心与增强功能，输出对照表', memberIds: ['m2', 'm3'], labelIds: ['lb4'], due: addDays(2), checklist: [{ id: uid('k'), text: '列功能清单', done: true }, { id: uid('k'), text: '写对照矩阵', done: false }], comments: [{ id: uid('m'), who: '陈宇', text: '已拉好对照表草稿，待评审', ts: Date.now() - 3600000 }], attachments: [] },
             { id: uid('c'), title: '准备技术选型文档', desc: '', memberIds: [], labelIds: [], due: '', checklist: [], comments: [], attachments: [] }
