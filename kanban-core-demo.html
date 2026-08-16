@@ -342,7 +342,7 @@
   .cal-head h2 { font-size: 17px; font-weight: 700; }
   .cal-nav { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 7px; min-width: 30px; height: 30px; padding: 0 10px; cursor: pointer; color: var(--text-2); font-size: 15px; }
   .cal-nav:hover { border-color: var(--primary); color: var(--primary); }
-  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
   .cal-dow { font-size: 12px; color: var(--text-3); font-weight: 600; text-align: center; padding-bottom: 4px; }
   .cal-cell { min-height: 104px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 7px; display: flex; flex-direction: column; gap: 5px; }
   .cal-cell.out { opacity: .4; }
@@ -418,14 +418,14 @@
   .bar-label { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 4px; }
   .bl-name { font-size: 12px; color: var(--text-2); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: relative; cursor: default; }
   /* JS 动态创建的真实 DOM 气泡，position:fixed 不受任何祖先 overflow 裁剪 */
-  .bar-tip-float {
+  .tip-float {
     position: fixed; z-index: 99999; pointer-events: none;
     background: var(--text); color: var(--surface);
     font-size: 11px; font-weight: 500; padding: 5px 9px;
     border-radius: 7px; white-space: nowrap; max-width: 240px;
     box-shadow: var(--shadow-md);
   }
-  .bar-tip-float::after {
+  .tip-float::after {
     content: ""; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
     border: 5px solid transparent; border-top-color: var(--text);
   }
@@ -463,7 +463,7 @@
     </aside>
     <div class="main">
       <header class="topbar">
-        <div class="board-title" id="boardTitle" title="双击重命名项目">产品迭代看板</div>
+        <div class="board-title" id="boardTitle">产品迭代看板</div>
         <span class="scope-tag">核心 + 基础 + 增强 Demo</span>
         <div class="view-switch" id="viewSwitch">
           <button data-view="board" class="active">▦ 看板</button>
@@ -741,69 +741,70 @@ function render() {
   }
   boardEl.innerHTML = inner;
   if (currentView === 'board') bindAll();
-  if (currentView === 'report') initBarsTooltip();
+  initEllipsisTips();
   bindCalendarNav();
   applyFilter();
   renderFilterUI();
 }
 function setView(v) { currentView = v; state.view = v; save(); updateViewSwitch(); render(); }
-/* 仅当列名被截断（出现省略号）时才给该柱子挂 data-tip 气泡；未截断则直接显示全称。
-   用 Range API 浮点精确测量文字真实渲染宽度，与元素实际盒宽严格比较（textW > availW）。
-   注意：不能用 +1 容差——当文字与可用宽仅差 1px 时浏览器已画省略号，容差会把这种真实截断误判为不截断。 */
-function initBarsTooltip() {
+/* —— 通用省略号 Tooltip ——
+   对所有带 overflow:hidden + text-overflow:ellipsis 的文本元素，只要被截断（出现省略号），
+   悬停就弹出气泡显示完整内容；未截断则直接显示、不弹。
+   统一用 Range API 浮点测量文字真实渲染宽度 vs 元素盒宽（textW > availW）判定截断，
+   与浏览器画省略号的条件完全一致（不能用 +1 容差，会漏判恰好差 1px 的短名）。 */
+var TIP_SELECTORS = '.bars .bl-name, .hbar-name, .cal-card, .list-title, .board-title, .proj-name, .att .nm';
+function initEllipsisTips() {
   requestAnimationFrame(function () {
-  requestAnimationFrame(function () {
-  var names = boardEl.querySelectorAll('.bars .bl-name');
-  names.forEach(function (el) {
-    var label = el.closest('.bar-label');
-    if (!label) return;
-    // Range 测量文字真实渲染宽度（浮点，不受 overflow/ellipsis 裁剪影响）
-    var range = document.createRange();
-    range.selectNodeContents(el);
-    var textW = range.getBoundingClientRect().width;
-    // 可用宽度 = .bl-name 被 flex 压缩后的实际盒宽（浮点）
-    var availW = el.getBoundingClientRect().width;
-    if (textW > availW) {
-      label.setAttribute('data-tip', el.textContent);
-    } else {
-      label.removeAttribute('data-tip');
-    }
+    requestAnimationFrame(function () {
+      document.querySelectorAll(TIP_SELECTORS).forEach(function (el) {
+        // 编辑态（列表标题双击变 input、看板标题双击变 contenteditable）跳过，避免误判
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) { el.removeAttribute('data-tip'); return; }
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        var textW = range.getBoundingClientRect().width;   // 真实文字渲染宽度（浮点）
+        var availW = el.getBoundingClientRect().width;       // 元素实际盒宽（浮点）
+        if (textW > availW) {
+          el.setAttribute('data-tip', el.textContent.trim());
+        } else {
+          el.removeAttribute('data-tip');
+        }
+      });
+    });
   });
-  bindBarTips();
-  });
-  });
+  bindTips();
 }
-/* 真实 DOM 气泡：position:fixed 不受祖先 overflow 裁剪，z-index 极高不被遮挡 */
-var _barTipEl = null;
-function showBarTip(label) {
-  hideBarTip();
-  var text = label.getAttribute('data-tip');
+/* 真实 DOM 气泡：position:fixed 不受任何祖先 overflow 裁剪，z-index 极高不被遮挡 */
+var _tipEl = null;
+function showTip(el) {
+  hideTip();
+  var text = el.getAttribute('data-tip');
   if (!text) return;
-  _barTipEl = document.createElement('div');
-  _barTipEl.className = 'bar-tip-float';
-  _barTipEl.textContent = text;
-  document.body.appendChild(_barTipEl);
-  var r = label.getBoundingClientRect();
-  var w = _barTipEl.offsetWidth, h = _barTipEl.offsetHeight;
+  _tipEl = document.createElement('div');
+  _tipEl.className = 'tip-float';
+  _tipEl.textContent = text;
+  document.body.appendChild(_tipEl);
+  var r = el.getBoundingClientRect();
+  var w = _tipEl.offsetWidth, h = _tipEl.offsetHeight;
   var left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2));
   var top = r.top - h - 8;
   if (top < 8) top = r.bottom + 8; /* 上方放不下就放下方 */
-  _barTipEl.style.left = left + 'px';
-  _barTipEl.style.top = top + 'px';
+  _tipEl.style.left = left + 'px';
+  _tipEl.style.top = top + 'px';
 }
-function hideBarTip() {
-  if (_barTipEl) { _barTipEl.remove(); _barTipEl = null; }
+function hideTip() {
+  if (_tipEl) { _tipEl.remove(); _tipEl = null; }
 }
-function bindBarTips() {
-  if (boardEl._barTipBound) return;
-  boardEl._barTipBound = true;
-  boardEl.addEventListener('mouseover', function (e) {
-    var label = e.target.closest && e.target.closest('.bars .bar-label[data-tip]');
-    if (label) showBarTip(label);
+var _tipBound = false;
+function bindTips() {
+  if (_tipBound) return;
+  _tipBound = true;
+  document.addEventListener('mouseover', function (e) {
+    var el = e.target.closest && e.target.closest('[data-tip]');
+    if (el) showTip(el);
   });
-  boardEl.addEventListener('mouseout', function (e) {
-    var label = e.target.closest && e.target.closest('.bars .bar-label[data-tip]');
-    if (label) hideBarTip();
+  document.addEventListener('mouseout', function (e) {
+    var el = e.target.closest && e.target.closest('[data-tip]');
+    if (el) hideTip();
   });
 }
 function updateViewSwitch() {
@@ -858,7 +859,7 @@ function viewCalendar() {
   for (var day = 1; day <= daysInMonth; day++) {
     var ds = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
     var isToday = (today.getFullYear() === y && today.getMonth() === m && today.getDate() === day);
-    var chips = (cardsByDate[ds] || []).map(function (c) { return '<div class="cal-card" data-card-id="' + c.id + '" title="' + esc(c.title) + '">' + esc(c.title) + '</div>'; }).join('');
+    var chips = (cardsByDate[ds] || []).map(function (c) { return '<div class="cal-card" data-card-id="' + c.id + '">' + esc(c.title) + '</div>'; }).join('');
     cells.push('<div class="cal-cell' + (isToday ? ' today' : '') + '"><span class="cal-date">' + day + '</span>' + chips + '</div>');
   }
   var needed = Math.ceil((startDow + daysInMonth) / 7) * 7;
@@ -923,7 +924,7 @@ function kpi(color, label, val, danger) {
 function hbars(rows, max) {
   return rows.map(function (b) {
     var pct = max ? Math.round(b.n / max * 100) : 0;
-    return '<div class="hbar-row"><span class="hbar-name" title="' + esc(b.name) + '">' + esc(b.name) + '</span><span class="hbar-track"><span class="hbar-fill" style="width:' + pct + '%;background:' + (b.color || 'var(--primary)') + '"></span></span><span class="hbar-val">' + b.n + '</span></div>';
+    return '<div class="hbar-row"><span class="hbar-name">' + esc(b.name) + '</span><span class="hbar-track"><span class="hbar-fill" style="width:' + pct + '%;background:' + (b.color || 'var(--primary)') + '"></span></span><span class="hbar-val">' + b.n + '</span></div>';
   }).join('');
 }
 function donutRing(segs, total) {
@@ -945,7 +946,7 @@ function listHtml(list) {
   return '<section class="list" data-list-id="' + list.id + '">' +
     '<div class="list-header">' +
       '<span class="drag-handle" draggable="true" title="拖动排序列表">⋮⋮</span>' +
-      '<span class="list-title" title="双击重命名">' + esc(list.title) + '</span>' +
+      '<span class="list-title">' + esc(list.title) + '</span>' +
       '<span class="list-count">' + list.cards.length + '</span>' +
       '<button class="list-menu" title="列表菜单">•••</button>' +
     '</div>' +
@@ -1422,6 +1423,7 @@ function renderDetail() {
       var rd = new FileReader(); rd.onload = function () { handle(rd.result); }; rd.readAsDataURL(f);
     } else { handle(null); }
   });
+  initEllipsisTips();
 }
 function section(ico, title, inner) {
   return '<div class="sec"><div class="sec-ico">' + ico + '</div><div class="sec-main"><div class="sec-title">' + title + '</div>' + inner + '</div></div>';
@@ -1551,7 +1553,7 @@ document.addEventListener('keydown', function (e) {
     if (modalCardId) closeDetail();
   }
 });
-window.addEventListener('resize', function () { if (currentView === 'report') initBarsTooltip(); });
+window.addEventListener('resize', function () { initEllipsisTips(); });
 
 /* ---------- 命令面板 ⌘K ---------- */
 var paletteOpen = false;
